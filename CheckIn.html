@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check-in nhận quà - Masan Amazing Race 2026</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root{--primary:#1a3e8c;--accent:#ff6a00;--ok:#1a9c4a;--warn:#e0a800;--bad:#d32f2f;}
+    *{box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,sans-serif;margin:0;background:#f2f4f8;color:#222;}
+    .header{background:var(--primary);color:#fff;padding:14px 16px;}
+    .header h1{margin:0;font-size:18px;}
+    .container{padding:14px;max-width:560px;margin:auto;}
+    .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+    label{font-weight:600;font-size:14px;}
+    input[type=text]{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px;margin-top:6px;}
+    button{border:none;border-radius:8px;padding:12px 16px;font-size:15px;font-weight:600;cursor:pointer;}
+    .btn-accent{background:var(--accent);color:#fff;width:100%;margin-top:8px;}
+    .btn-sm{padding:6px 10px;font-size:13px;background:#eee;color:#333;}
+    #reader{width:100%;border-radius:12px;overflow:hidden;}
+    #manualInput{display:flex;gap:8px;margin-top:8px;}
+    #manualInput input{flex:1;}
+
+    .total-box{background:var(--accent);color:#fff;border-radius:10px;padding:10px 14px;font-weight:700;text-align:center;margin-bottom:10px;font-size:13px;}
+
+    .person-card{border:1px solid #e5e5e5;border-radius:10px;margin-bottom:10px;overflow:hidden;}
+    .person-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f7f8fb;}
+    .person-head b{font-size:14.5px;}
+    .person-head small{color:#666;display:block;}
+    .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;color:#fff;font-weight:600;margin-left:6px;}
+    .badge-none{background:#999;}
+    .badge-partial{background:var(--warn);}
+    .badge-full{background:var(--ok);}
+
+    .item-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid #f0f0f0;}
+    .item-row.done{background:#f4f9f5;color:#888;}
+    .item-row input[type=checkbox]{width:20px;height:20px;flex-shrink:0;}
+    .item-label{flex:1;font-size:14px;}
+    .item-tag{font-size:11px;color:var(--ok);font-weight:600;}
+
+    .person-actions{display:flex;justify-content:flex-end;padding:6px 12px 10px;}
+
+    .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;z-index:999;display:none;max-width:90%;text-align:center;}
+    .footer-link{text-align:center;margin-top:6px;}
+    .footer-link a{font-size:12px;color:#888;text-decoration:none;}
+  </style>
+</head>
+<body>
+  <div class="header"><h1>🎁 Check-in nhận quà - Masan Amazing Race 2026</h1></div>
+  <div class="container">
+
+    <!-- ⚠️ CẤU HÌNH BẮT BUỘC: dán URL Web app Apps Script vào đây (menu Sheet: "🔗 Lấy link API") -->
+    <div class="card">
+      <label>👤 Người phát quà (BTC) *</label>
+      <input type="text" id="tenNguoiPhat" placeholder="Nhập tên của bạn để bắt đầu quét">
+      <label style="margin-top:10px;">🔑 Mã truy cập Check-in *</label>
+      <input type="text" id="maTruyCap" placeholder="Mã do BTC cấp (đặt trong menu Sheet)">
+    </div>
+
+    <div class="card" id="scanCard" style="display:none;">
+      <div id="reader"></div>
+      <div id="manualInput">
+        <input type="text" id="manualMSNV" placeholder="Hoặc nhập MSNV thủ công">
+        <button class="btn-sm" onclick="themThuCong()">Thêm</button>
+      </div>
+    </div>
+
+    <div class="card" id="batchCard" style="display:none;">
+      <div class="total-box" id="totalBox">Đang chọn: 0 người</div>
+      <div id="batchList"></div>
+      <button class="btn-accent" onclick="xacNhanPhatQua()">✅ XÁC NHẬN PHÁT CÁC MÓN ĐÃ TICK</button>
+      <button class="btn-sm" style="width:100%;margin-top:8px;" onclick="xoaHetBatch()">Xóa toàn bộ danh sách quét</button>
+    </div>
+
+    <div class="footer-link"><a href="admin.html">🛠️ Trang quản trị</a></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+<script>
+// ⚠️ THAY URL NÀY bằng link Web app Apps Script (menu Sheet: "🔗 Lấy link API")
+const API_URL = 'DÁN_LINK_API_APPS_SCRIPT_VAO_DAY';
+
+let batch = {}; // { msnv: { hoTen, bu, chiTiet:[{loai,soLuong,daPhat}], checked:Set } }
+let scanner = null;
+let dangXuLy = false;
+
+document.getElementById('tenNguoiPhat').addEventListener('input', kiemTraSanSangQuet);
+document.getElementById('maTruyCap').addEventListener('input', kiemTraSanSangQuet);
+
+function kiemTraSanSangQuet() {
+  const co = document.getElementById('tenNguoiPhat').value.trim().length > 0 &&
+             document.getElementById('maTruyCap').value.trim().length >= 0; // mã có thể để trống nếu chưa cấu hình
+  document.getElementById('scanCard').style.display = co ? 'block' : 'none';
+  if (co && !scanner) khoiDongScanner();
+}
+
+function khoiDongScanner() {
+  scanner = new Html5Qrcode('reader');
+  Html5Qrcode.getCameras().then(cams => {
+    if (!cams.length) { showToast('Không tìm thấy camera. Dùng ô nhập MSNV thủ công bên dưới.'); return; }
+    const camId = cams[cams.length - 1].id; // thường camera sau nằm cuối danh sách
+    scanner.start(camId, { fps: 10, qrbox: 240 }, onScanSuccess, () => {});
+  }).catch(() => showToast('Không truy cập được camera. Dùng ô nhập MSNV thủ công.'));
+}
+
+function onScanSuccess(decodedText) {
+  if (dangXuLy) return;
+  xuLyMa(decodedText);
+}
+
+function themThuCong() {
+  const val = document.getElementById('manualMSNV').value.trim();
+  if (!val) return;
+  xuLyMa(val);
+  document.getElementById('manualMSNV').value = '';
+}
+
+// ---------- Gọi API (POST, Content-Type: text/plain để tránh CORS preflight) ----------
+async function goiApi(action, payload) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, payload })
+  });
+  return res.json();
+}
+
+function maTruyCapHienTai() { return document.getElementById('maTruyCap').value.trim(); }
+
+function xuLyMa(maQuet) {
+  if (dangXuLy) return;
+  dangXuLy = true;
+  beep();
+  goiApi('timNguoiNhan', { maQuet, maTruyCap: maTruyCapHienTai() })
+    .then(res => { dangXuLy = false; xuLyKetQuaTim(res); })
+    .catch(err => { dangXuLy = false; showToast('Lỗi kết nối: ' + err.message); });
+}
+
+function xuLyKetQuaTim(res) {
+  if (!res.ok) { showToast('❌ ' + res.error); return; }
+
+  if (res.trangThai === 'Đã nhận đủ') {
+    showToast(`✅ ${res.hoTen} ĐÃ NHẬN ĐỦ toàn bộ quà lúc ${res.thoiGianNhanGanNhat} (bởi ${res.nguoiPhatGanNhat})`);
+  }
+
+  const checked = new Set(res.chiTiet.filter(it => !it.daPhat).map(it => it.loai));
+  batch[res.msnv] = { hoTen: res.hoTen, bu: res.bu, chiTiet: res.chiTiet, checked: checked, trangThai: res.trangThai };
+
+  showToast(`✅ Đã thêm ${res.hoTen} vào danh sách quét`);
+  veLaiBatch();
+}
+
+function xoaKhoiBatch(msnv) { delete batch[msnv]; veLaiBatch(); }
+function xoaHetBatch() { batch = {}; veLaiBatch(); }
+
+function toggleMon(msnv, loai) {
+  const p = batch[msnv];
+  if (!p) return;
+  if (p.checked.has(loai)) p.checked.delete(loai); else p.checked.add(loai);
+  veLaiBatch();
+}
+
+function badgeHtml(trangThai) {
+  if (trangThai === 'Đã nhận đủ') return '<span class="badge badge-full">Đã nhận đủ</span>';
+  if (trangThai === 'Nhận một phần') return '<span class="badge badge-partial">Nhận một phần</span>';
+  return '<span class="badge badge-none">Chưa nhận</span>';
+}
+
+function veLaiBatch() {
+  const keys = Object.keys(batch);
+  document.getElementById('batchCard').style.display = keys.length ? 'block' : 'none';
+
+  const tongTheoLoai = {};
+  keys.forEach(msnv => {
+    const p = batch[msnv];
+    p.chiTiet.forEach(it => {
+      if (p.checked.has(it.loai) && !it.daPhat) {
+        tongTheoLoai[it.loai] = (tongTheoLoai[it.loai] || 0) + it.soLuong;
+      }
+    });
+  });
+  const tongStr = Object.keys(tongTheoLoai).length
+    ? Object.entries(tongTheoLoai).map(([loai, sl]) => `${loai} x${sl}`).join(' | ')
+    : 'chưa tick món nào';
+  document.getElementById('totalBox').innerText = `${keys.length} người trong danh sách — Cần chuẩn bị: ${tongStr}`;
+
+  let html = '';
+  keys.forEach(msnv => {
+    const p = batch[msnv];
+    let itemsHtml = '';
+    p.chiTiet.forEach(it => {
+      if (it.daPhat) {
+        itemsHtml += `<div class="item-row done">
+          <input type="checkbox" checked disabled>
+          <div class="item-label">${it.loai} x${it.soLuong}</div>
+          <div class="item-tag">Đã phát trước</div>
+        </div>`;
+      } else {
+        const checked = p.checked.has(it.loai) ? 'checked' : '';
+        itemsHtml += `<div class="item-row">
+          <input type="checkbox" ${checked} onchange="toggleMon('${msnv}','${it.loai.replace(/'/g,"\\'")}')">
+          <div class="item-label">${it.loai} x${it.soLuong}</div>
+        </div>`;
+      }
+    });
+
+    html += `<div class="person-card">
+      <div class="person-head">
+        <div><b>${p.hoTen}</b> ${badgeHtml(p.trangThai)}<br><small>MSNV: ${msnv}${p.bu ? ' · ' + p.bu : ''}</small></div>
+      </div>
+      ${itemsHtml}
+      <div class="person-actions"><button class="btn-sm" onclick="xoaKhoiBatch('${msnv}')">Xóa khỏi danh sách</button></div>
+    </div>`;
+  });
+  document.getElementById('batchList').innerHTML = html;
+}
+
+function xacNhanPhatQua() {
+  const ten = document.getElementById('tenNguoiPhat').value.trim();
+  const keys = Object.keys(batch);
+  if (!ten) { showToast('Vui lòng nhập tên người phát quà.'); return; }
+  if (!keys.length) { showToast('Chưa có ai trong danh sách quét.'); return; }
+
+  const danhSachPhat = keys
+    .map(msnv => ({ msnv, loaiDaChon: Array.from(batch[msnv].checked) }))
+    .filter(x => x.loaiDaChon.length > 0);
+
+  if (!danhSachPhat.length) { showToast('Chưa tick món quà nào để phát.'); return; }
+
+  const soNguoi = danhSachPhat.length;
+  if (!confirm(`Xác nhận đã trao các món đã tick cho ${soNguoi} người?`)) return;
+
+  goiApi('xacNhanPhatQuaHangLoat', { danhSachPhat, tenNguoiPhat: ten, maTruyCap: maTruyCapHienTai() })
+    .then(res => {
+      if (!res.ok) { showToast('❌ ' + (res.error || 'Lỗi không xác định')); return; }
+      let thanhCong = 0, thatBai = 0;
+      res.ketQua.forEach(k => { if (k.ok) thanhCong++; else thatBai++; });
+      showToast(`✅ Đã cập nhật ${thanhCong} người.` + (thatBai ? ` ⚠️ ${thatBai} lỗi (kiểm tra lại).` : ''));
+      xoaHetBatch();
+    })
+    .catch(err => showToast('Lỗi kết nối: ' + err.message));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerText = msg; t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.display = 'none', 4000);
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.value = 0.05;
+    o.start(); setTimeout(() => o.stop(), 100);
+  } catch (e) {}
+}
+</script>
+</body>
+</html>

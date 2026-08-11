@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quản trị hệ thống - MAR 2026</title>
+  <style>
+    :root{--primary:#1a3e8c;--accent:#ff6a00;--ok:#1a9c4a;--warn:#e0a800;--bad:#d32f2f;--bg:#f2f4f8;}
+    *{box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,sans-serif;margin:0;background:var(--bg);color:#222;}
+    .header{background:var(--primary);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;}
+    .header h1{margin:0;font-size:17px;}
+    .header a{color:#cfe0ff;font-size:12px;text-decoration:none;}
+    .tabs{display:flex;background:#fff;border-bottom:1px solid #e0e0e0;position:sticky;top:0;z-index:5;flex-wrap:wrap;}
+    .tab{flex:1;min-width:90px;text-align:center;padding:12px 6px;font-size:13px;font-weight:600;color:#888;cursor:pointer;border-bottom:3px solid transparent;}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+    .container{padding:14px;max-width:760px;margin:auto;}
+    .panel{display:none;}
+    .panel.active{display:block;}
+    .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+    .card h3{margin:0 0 12px;font-size:15px;color:var(--primary);}
+    label{font-weight:600;font-size:13px;display:block;margin-top:10px;}
+    input[type=text],input[type=email],input[type=password]{width:100%;padding:9px;border:1px solid #ccc;border-radius:8px;font-size:14px;margin-top:4px;}
+    textarea{width:100%;padding:9px;border:1px solid #ccc;border-radius:8px;font-size:14px;margin-top:4px;font-family:Arial,sans-serif;}
+    .hint{font-size:11.5px;color:#888;margin-top:3px;}
+    button{border:none;border-radius:8px;padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer;}
+    .btn-primary{background:var(--primary);color:#fff;width:100%;margin-top:14px;}
+    .btn-accent{background:var(--accent);color:#fff;width:100%;margin-top:8px;}
+    .msg{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;display:none;}
+    .msg.ok{background:#e2efda;color:#155724;display:block;}
+    .msg.err{background:#fce4e4;color:#a11;display:block;}
+
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:6px;}
+    .stat-box{background:#f7f8fb;border-radius:10px;padding:12px;text-align:center;}
+    .stat-box .num{font-size:22px;font-weight:800;color:var(--primary);}
+    .stat-box .lbl{font-size:11.5px;color:#666;margin-top:2px;}
+    .stat-box.warn .num{color:var(--warn);}
+    .stat-box.bad .num{color:var(--bad);}
+    .stat-box.ok .num{color:var(--ok);}
+
+    .bar-row{margin-bottom:10px;}
+    .bar-row .bar-label{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px;}
+    .bar-bg{background:#eee;border-radius:6px;height:10px;overflow:hidden;}
+    .bar-fill{background:var(--primary);height:100%;border-radius:6px;}
+
+    table{width:100%;border-collapse:collapse;font-size:12.5px;}
+    th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee;}
+    th{color:#666;font-weight:600;}
+    .refresh-note{font-size:11.5px;color:#888;text-align:right;margin-top:8px;}
+    .badge-inline{background:#eee;border-radius:20px;padding:1px 8px;font-size:11px;margin-left:6px;}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🛠️ Quản trị hệ thống - MAR 2026</h1>
+    <a href="checkin.html">← Về trang Check-in</a>
+  </div>
+
+  <!-- Nhập mật khẩu Admin trước khi vào -->
+  <div class="container" id="loginBox">
+    <div class="card">
+      <h3>Đăng nhập Quản trị</h3>
+      <label>Mật khẩu trang Admin</label>
+      <input type="password" id="matKhauAdmin" placeholder="Nhập mật khẩu (đặt trong menu Sheet)">
+      <button class="btn-primary" onclick="dangNhap()">Vào trang quản trị</button>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+  </div>
+
+  <div id="appBox" style="display:none;">
+    <div class="tabs">
+      <div class="tab active" data-tab="settings" onclick="chuyenTab('settings')">⚙️ Cài đặt</div>
+      <div class="tab" data-tab="email" onclick="chuyenTab('email')">📧 Nội dung Email</div>
+      <div class="tab" data-tab="testmail" onclick="chuyenTab('testmail')">✉️ Test Email</div>
+      <div class="tab" data-tab="dashboard" onclick="chuyenTab('dashboard')">📊 Dashboard</div>
+    </div>
+
+    <div class="container">
+
+      <!-- ============ TAB CÀI ĐẶT ============ -->
+      <div class="panel active" id="panel-settings">
+        <div class="card">
+          <h3>Google Sheet dữ liệu</h3>
+          <label>Sheet ID <span id="sheetIdMacDinh" class="badge-inline" style="display:none;">đang dùng mặc định trong code</span></label>
+          <input type="text" id="sheetId" placeholder="ID của Google Sheet chứa DS_NhanQua/Kho_Qua/Log_PhatQua">
+          <div class="hint">Để trống = dùng SHEET_ID khai báo sẵn trong Code.gs.</div>
+        </div>
+
+        <div class="card">
+          <h3>Microsoft Graph (gửi email)</h3>
+          <label>Application (client) ID</label>
+          <input type="text" id="clientId" placeholder="Client ID từ Azure AD App Registration">
+
+          <label>Directory (tenant) ID</label>
+          <input type="text" id="tenantId" placeholder="Tenant ID">
+
+          <label>Client Secret <span id="secretStatus" class="badge-inline" style="display:none;"></span></label>
+          <input type="password" id="clientSecret" placeholder="Để trống nếu không muốn đổi secret hiện tại">
+          <div class="hint">Chỉ nhập khi muốn THAY secret mới. Secret cũ không hiển thị lại vì lý do bảo mật.</div>
+
+          <label>Email hòm mail dùng để gửi (UPN)</label>
+          <input type="text" id="mailFrom" placeholder="vd: btc.marace@wincommerce.vn">
+        </div>
+
+        <button class="btn-primary" onclick="luuCauHinh()">💾 Lưu cấu hình</button>
+        <div class="msg" id="settingsMsg"></div>
+      </div>
+
+      <!-- ============ TAB NỘI DUNG EMAIL ============ -->
+      <div class="panel" id="panel-email">
+        <div class="card">
+          <h3>Nội dung email thông báo nhận quà</h3>
+          <p style="font-size:12.5px;color:#666;margin-top:-4px;">Nội dung này áp dụng cho email gửi hàng loạt
+          (kèm mã QR) và email thử nghiệm. Phần danh sách quà, ảnh QR, và khung thương hiệu được tự động tạo,
+          chỉ cần chỉnh tiêu đề và lời mở đầu bên dưới.</p>
+
+          <label>Tiêu đề email (Subject)</label>
+          <input type="text" id="emailSubject" placeholder="🎉 Quà tặng của bạn - Masan Amazing Race 2026">
+
+          <label>Lời mở đầu (hiển thị phía trên danh sách quà)</label>
+          <textarea id="emailIntro" rows="5" placeholder="Bạn có quà tặng từ chương trình Masan Amazing Race 2026..."></textarea>
+          <div class="hint">Xuống dòng sẽ tự động giữ nguyên khi hiển thị trong email.</div>
+
+          <button class="btn-primary" onclick="luuNoiDung()">💾 Lưu nội dung email</button>
+          <div class="msg" id="emailMsg"></div>
+        </div>
+
+        <div class="card">
+          <h3>Xem trước</h3>
+          <button class="btn-accent" onclick="xemTruoc()">👁️ Xem trước email (dữ liệu mẫu)</button>
+          <div style="margin-top:14px;border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fff;">
+            <iframe id="previewFrame" style="width:100%;height:640px;border:none;"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ TAB TEST EMAIL ============ -->
+      <div class="panel" id="panel-testmail">
+        <div class="card">
+          <h3>Gửi email thử nghiệm</h3>
+          <p style="font-size:13px;color:#555;">Gửi 1 email kèm mã QR mẫu để kiểm tra cấu hình Microsoft Graph đã
+          hoạt động đúng chưa, trước khi gửi hàng loạt cho danh sách thật.</p>
+          <label>Email nhận thử nghiệm</label>
+          <input type="email" id="testEmail" placeholder="email-cua-ban@wincommerce.vn">
+          <button class="btn-accent" onclick="guiTestEmail()">📤 Gửi email thử nghiệm</button>
+          <div class="msg" id="testMailMsg"></div>
+        </div>
+      </div>
+
+      <!-- ============ TAB DASHBOARD ============ -->
+      <div class="panel" id="panel-dashboard">
+        <div class="card">
+          <h3>Tổng quan tình trạng nhận quà</h3>
+          <div class="stat-grid" id="statTrangThai"></div>
+        </div>
+
+        <div class="card">
+          <h3>Tình trạng gửi email</h3>
+          <div class="stat-grid" id="statEmail"></div>
+        </div>
+
+        <div class="card">
+          <h3>Số người theo BU / Chuỗi</h3>
+          <div id="statBU"></div>
+        </div>
+
+        <div class="card">
+          <h3>Tồn kho theo loại quà</h3>
+          <div id="statKho"></div>
+        </div>
+
+        <div class="card">
+          <h3>Nhật ký phát quà gần đây</h3>
+          <div style="overflow-x:auto;">
+            <table id="tableLog">
+              <thead><tr><th>Thời gian</th><th>MSNV</th><th>Họ tên</th><th>Món đã phát</th><th>Người phát</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="taiDashboard()">🔄 Làm mới dữ liệu</button>
+        <div class="refresh-note" id="refreshNote"></div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+// ⚠️ THAY URL NÀY bằng link Web app Apps Script (menu Sheet: "🔗 Lấy link API")
+const API_URL = 'DÁN_LINK_API_APPS_SCRIPT_VAO_DAY';
+
+let matKhauAdmin = '';
+
+async function goiApi(action, payload) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, payload: Object.assign({ matKhau: matKhauAdmin }, payload || {}) })
+  });
+  return res.json();
+}
+
+function dangNhap() {
+  matKhauAdmin = document.getElementById('matKhauAdmin').value;
+  const msgEl = document.getElementById('loginMsg');
+  msgEl.className = 'msg ok';
+  msgEl.innerText = 'Đang kiểm tra...';
+
+  goiApi('layCauHinhHienTai', {})
+    .then(res => {
+      if (!res.ok) {
+        msgEl.className = 'msg err';
+        msgEl.innerText = '❌ ' + res.error;
+        return;
+      }
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('appBox').style.display = 'block';
+      apDungCauHinh(res.data);
+      taiNoiDungEmail();
+    })
+    .catch(err => {
+      msgEl.className = 'msg err';
+      msgEl.innerText = '❌ Lỗi kết nối: ' + err.message;
+    });
+}
+
+function chuyenTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'dashboard') taiDashboard();
+  if (tab === 'email') taiNoiDungEmail();
+}
+
+// ---------- CÀI ĐẶT ----------
+function apDungCauHinh(cfg) {
+  document.getElementById('sheetId').value = cfg.dangDungMacDinh ? '' : cfg.sheetId;
+  document.getElementById('sheetIdMacDinh').style.display = cfg.dangDungMacDinh ? 'inline-block' : 'none';
+  document.getElementById('clientId').value = cfg.clientId;
+  document.getElementById('tenantId').value = cfg.tenantId;
+  document.getElementById('mailFrom').value = cfg.mailFrom;
+  const secretStatus = document.getElementById('secretStatus');
+  secretStatus.style.display = 'inline-block';
+  secretStatus.innerText = cfg.coClientSecret ? '✅ đã lưu' : '⚠️ chưa cấu hình';
+}
+
+function luuCauHinh() {
+  const config = {
+    sheetId: document.getElementById('sheetId').value.trim(),
+    clientId: document.getElementById('clientId').value.trim(),
+    tenantId: document.getElementById('tenantId').value.trim(),
+    clientSecret: document.getElementById('clientSecret').value.trim(),
+    mailFrom: document.getElementById('mailFrom').value.trim()
+  };
+  const msgEl = document.getElementById('settingsMsg');
+  goiApi('luuCauHinhTuAdmin', { config })
+    .then(res => {
+      msgEl.className = 'msg ' + (res.ok ? 'ok' : 'err');
+      msgEl.innerText = (res.ok ? '✅ ' : '❌ ') + (res.message || res.error);
+      document.getElementById('clientSecret').value = '';
+      if (res.ok) goiApi('layCauHinhHienTai', {}).then(r => r.ok && apDungCauHinh(r.data));
+    })
+    .catch(err => { msgEl.className = 'msg err'; msgEl.innerText = '❌ Lỗi: ' + err.message; });
+}
+
+// ---------- NỘI DUNG EMAIL ----------
+function taiNoiDungEmail() {
+  goiApi('layNoiDungEmailChoAdmin', {}).then(res => {
+    if (!res.ok) return;
+    document.getElementById('emailSubject').value = res.data.subject;
+    document.getElementById('emailIntro').value = res.data.intro;
+  });
+}
+
+function luuNoiDung() {
+  const config = {
+    subject: document.getElementById('emailSubject').value.trim(),
+    intro: document.getElementById('emailIntro').value.trim()
+  };
+  const msgEl = document.getElementById('emailMsg');
+  goiApi('luuNoiDungEmail', { config })
+    .then(res => {
+      msgEl.className = 'msg ' + (res.ok ? 'ok' : 'err');
+      msgEl.innerText = (res.ok ? '✅ ' : '❌ ') + (res.message || res.error);
+    })
+    .catch(err => { msgEl.className = 'msg err'; msgEl.innerText = '❌ Lỗi: ' + err.message; });
+}
+
+function xemTruoc() {
+  goiApi('xemTruocEmail', {}).then(res => {
+    if (res.ok) document.getElementById('previewFrame').srcdoc = res.html;
+  });
+}
+
+// ---------- TEST EMAIL ----------
+function guiTestEmail() {
+  const email = document.getElementById('testEmail').value.trim();
+  const msgEl = document.getElementById('testMailMsg');
+  if (!email) { msgEl.className = 'msg err'; msgEl.innerText = 'Vui lòng nhập email nhận thử nghiệm.'; return; }
+  msgEl.className = 'msg ok';
+  msgEl.innerText = 'Đang gửi...';
+  goiApi('guiEmailThuNghiem', { toEmail: email })
+    .then(res => {
+      msgEl.className = 'msg ' + (res.ok ? 'ok' : 'err');
+      msgEl.innerText = (res.ok ? '✅ ' : '❌ ') + (res.message || res.error);
+    })
+    .catch(err => { msgEl.className = 'msg err'; msgEl.innerText = '❌ Lỗi: ' + err.message; });
+}
+
+// ---------- DASHBOARD ----------
+function taiDashboard() {
+  goiApi('layThongKeDashboard', {})
+    .then(res => { if (res.ok) veDashboard(res.data); else document.getElementById('refreshNote').innerText = 'Lỗi: ' + res.error; })
+    .catch(err => { document.getElementById('refreshNote').innerText = 'Lỗi tải dashboard: ' + err.message; });
+}
+
+function statBox(num, lbl, cls) {
+  return `<div class="stat-box ${cls || ''}"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
+}
+
+function veDashboard(d) {
+  document.getElementById('statTrangThai').innerHTML =
+    statBox(d.tongSoNguoi, 'Tổng số người') +
+    statBox(d.chuaNhan, 'Chưa nhận') +
+    statBox(d.motPhan, 'Nhận một phần', 'warn') +
+    statBox(d.duDu, 'Đã nhận đủ', 'ok');
+
+  document.getElementById('statEmail').innerHTML =
+    statBox(d.daGuiEmail, 'Đã gửi email', 'ok') +
+    statBox(d.chuaGuiEmail, 'Chưa gửi (có email)', 'warn') +
+    statBox(d.thieuEmail, 'Thiếu email', 'bad');
+
+  let buHtml = '';
+  const maxBU = Math.max(1, ...d.theoBU.map(x => x.count));
+  d.theoBU.forEach(x => {
+    const pct = Math.round((x.count / maxBU) * 100);
+    buHtml += `<div class="bar-row">
+      <div class="bar-label"><span>${x.bu}</span><span>${x.count}</span></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;"></div></div>
+    </div>`;
+  });
+  document.getElementById('statBU').innerHTML = buHtml || '<p style="font-size:13px;color:#888;">Không có dữ liệu.</p>';
+
+  let khoHtml = '';
+  d.khoQua.forEach(k => {
+    khoHtml += `<div class="bar-row">
+      <div class="bar-label"><span>${k.loai}</span><span>${k.daPhat}/${k.tong} đã phát (còn ${k.conLai})</span></div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${k.phanTram}%;"></div></div>
+    </div>`;
+  });
+  document.getElementById('statKho').innerHTML = khoHtml || '<p style="font-size:13px;color:#888;">Chưa có dữ liệu kho.</p>';
+
+  const tbody = document.querySelector('#tableLog tbody');
+  tbody.innerHTML = d.logGanDay.map(l => `<tr>
+    <td>${l.thoiGian}</td><td>${l.msnv}</td><td>${l.hoTen}</td><td>${l.chiTiet}</td><td>${l.nguoiPhat}</td>
+  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#888;">Chưa có lượt phát nào.</td></tr>';
+
+  document.getElementById('refreshNote').innerText = 'Cập nhật lúc: ' + d.capNhatLuc;
+}
+</script>
+</body>
+</html>
