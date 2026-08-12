@@ -80,13 +80,13 @@
       <button class="btn-sm" style="width:100%;margin-top:8px;" onclick="xoaHetBatch()">Xóa toàn bộ danh sách quét</button>
     </div>
 
-    <div class="footer-link"><a href="admin.html">🛠️ Trang quản trị</a></div>
+    <div class="footer-link"><a href="admin.html">🛠️ Trang quản trị</a> · <a href="kiemke.html">📋 Kiểm kê quà</a></div>
   </div>
   <div class="toast" id="toast"></div>
 
 <script>
 // ⚠️ THAY URL NÀY bằng link Web app Apps Script (menu Sheet: "🔗 Lấy link API")
-const API_URL = 'https://script.google.com/macros/s/AKfycbwTHfuCg9DBidKBqfadFFgrl9cioHbmunik_jxv67AivNkc15nIHfdmOQYvDtN8yIZ9/exec';
+const API_URL = 'DÁN_LINK_API_APPS_SCRIPT_VAO_DAY';
 
 let batch = {}; // { msnv: { hoTen, bu, chiTiet:[{loai,soLuong,daPhat}], checked:Set } }
 let scanner = null;
@@ -167,7 +167,23 @@ async function goiApi(action, payload) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action, payload })
   });
-  return res.json();
+  const text = await res.text();
+  return parseJsonAnToan(text);
+}
+
+// Đọc JSON an toàn: nếu response có ký tự thừa sau đoạn JSON hợp lệ, tự động thử cắt bỏ
+// phần dư thừa thay vì báo lỗi cứng (đặc biệt hữu ích với response dài từ Apps Script).
+function parseJsonAnToan(text) {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    const trimmed = text.trim();
+    for (let end = trimmed.length; end > 0; end--) {
+      if (trimmed[end - 1] !== '}' && trimmed[end - 1] !== ']') continue;
+      try { return JSON.parse(trimmed.slice(0, end)); } catch (e2) { /* thử vị trí trước đó */ }
+    }
+    throw e;
+  }
 }
 
 function maTruyCapHienTai() { return document.getElementById('maTruyCap').value.trim(); }

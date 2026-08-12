@@ -48,12 +48,16 @@
     th{color:#666;font-weight:600;}
     .refresh-note{font-size:11.5px;color:#888;text-align:right;margin-top:8px;}
     .badge-inline{background:#eee;border-radius:20px;padding:1px 8px;font-size:11px;margin-left:6px;}
+    .lech-list{font-size:12.5px;margin:8px 0;}
+    .lech-list div{padding:4px 0;border-bottom:1px solid #f0f0f0;}
+    .lech-pos{color:var(--ok);font-weight:700;}
+    .lech-neg{color:var(--bad);font-weight:700;}
   </style>
 </head>
 <body>
   <div class="header">
     <h1>🛠️ Quản trị hệ thống - MAR 2026</h1>
-    <a href="checkin.html">← Về trang Check-in</a>
+    <a href="checkin.html">← Về trang Check-in</a> · <a href="kiemke.html" style="color:#cfe0ff;font-size:12px;text-decoration:none;">📋 Kiểm kê quà</a>
   </div>
 
   <!-- Nhập mật khẩu Admin trước khi vào -->
@@ -160,6 +164,11 @@
         </div>
 
         <div class="card">
+          <h3>Kiểm kê gần nhất</h3>
+          <div id="statKiemKe"></div>
+        </div>
+
+        <div class="card">
           <h3>Tổng hợp theo Miền</h3>
           <div style="overflow-x:auto;">
             <table id="tableMien">
@@ -208,7 +217,7 @@
 
 <script>
 // ⚠️ THAY URL NÀY bằng link Web app Apps Script (menu Sheet: "🔗 Lấy link API")
-const API_URL = 'https://script.google.com/macros/s/AKfycbwTHfuCg9DBidKBqfadFFgrl9cioHbmunik_jxv67AivNkc15nIHfdmOQYvDtN8yIZ9/exec';
+const API_URL = 'DÁN_LINK_API_APPS_SCRIPT_VAO_DAY';
 
 let matKhauAdmin = '';
 
@@ -218,7 +227,23 @@ async function goiApi(action, payload) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action, payload: Object.assign({ matKhau: matKhauAdmin }, payload || {}) })
   });
-  return res.json();
+  const text = await res.text();
+  return parseJsonAnToan(text);
+}
+
+// Đọc JSON an toàn: nếu response có ký tự thừa sau đoạn JSON hợp lệ (đôi khi xảy ra với
+// response dài từ Apps Script), tự động thử cắt bỏ phần dư thừa thay vì báo lỗi cứng.
+function parseJsonAnToan(text) {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    const trimmed = text.trim();
+    for (let end = trimmed.length; end > 0; end--) {
+      if (trimmed[end - 1] !== '}' && trimmed[end - 1] !== ']') continue;
+      try { return JSON.parse(trimmed.slice(0, end)); } catch (e2) { /* thử vị trí trước đó */ }
+    }
+    throw e;
+  }
 }
 
 function dangNhap() {
@@ -339,7 +364,43 @@ function statBox(num, lbl, cls) {
   return `<div class="stat-box ${cls || ''}"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
 }
 
+function veKiemKe(kk) {
+  const el = document.getElementById('statKiemKe');
+  if (!kk) {
+    el.innerHTML = '<p style="font-size:13px;color:#888;">Chưa có phiên kiểm kê nào. BTC thực hiện kiểm kê tại trang kiemke.html.</p>';
+    return;
+  }
+  let html = `<p style="font-size:13px;margin:0 0 8px;">
+    Phiên gần nhất: <b>${kk.thoiGian}</b> — bởi <b>${kk.nguoiKiemKe}</b> — ${kk.tongSoDong} dòng, 
+    <b style="color:${kk.soLech > 0 ? '#e0a800' : '#1a9c4a'};">${kk.soLech} dòng chênh lệch</b>.</p>`;
+
+  if (kk.soLech > 0) {
+    html += '<div class="lech-list">' + kk.chiTietLech.map(x => {
+      const cls = x.chenhLech > 0 ? 'lech-pos' : 'lech-neg';
+      const dau = x.chenhLech > 0 ? '+' : '';
+      return `<div>${x.loai} (${x.mien || 'Dùng chung'}): hệ thống ${x.conLaiHeThong} → thực tế ${x.thucTe}
+        <span class="${cls}">(${dau}${x.chenhLech})</span></div>`;
+    }).join('') + '</div>';
+    html += `<button class="btn-accent" onclick="apDungKiemKe('${kk.phien}')">✅ Áp dụng phiên này vào Kho_Qua</button>`;
+  } else {
+    html += '<p style="font-size:12.5px;color:#1a9c4a;">✅ Không có chênh lệch — không cần áp dụng gì thêm.</p>';
+  }
+  el.innerHTML = html;
+}
+
+function apDungKiemKe(phien) {
+  if (!confirm(`Xác nhận áp dụng phiên kiểm kê ${phien} vào Kho_Qua? Số ConLai/TongSoLuong sẽ được ghi đè theo số đếm thực tế.`)) return;
+  goiApi('capNhatKhoTheoKiemKe', { phien })
+    .then(res => {
+      alert(res.ok ? '✅ ' + res.message : '❌ ' + res.error);
+      if (res.ok) taiDashboard();
+    })
+    .catch(err => alert('❌ Lỗi kết nối: ' + err.message));
+}
+
 function veDashboard(d) {
+  veKiemKe(d.kiemKeGanNhat);
+
   document.getElementById('statTrangThai').innerHTML =
     statBox(d.tongSoNguoi, 'Tổng số người') +
     statBox(d.chuaNhan, 'Chưa nhận') +

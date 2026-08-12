@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kiểm kê quà - Masan Amazing Race 2026</title>
+  <style>
+    :root{--primary:#1a3e8c;--accent:#ff6a00;--ok:#1a9c4a;--warn:#e0a800;--bad:#d32f2f;--bg:#f2f4f8;}
+    *{box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,sans-serif;margin:0;background:var(--bg);color:#222;}
+    .header{background:var(--primary);color:#fff;padding:14px 16px;}
+    .header h1{margin:0;font-size:18px;}
+    .container{padding:14px;max-width:720px;margin:auto;}
+    .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+    label{font-weight:600;font-size:14px;}
+    input[type=text]{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px;margin-top:6px;}
+    button{border:none;border-radius:8px;padding:12px 16px;font-size:15px;font-weight:600;cursor:pointer;}
+    .btn-primary{background:var(--primary);color:#fff;width:100%;margin-top:8px;}
+    .btn-accent{background:var(--accent);color:#fff;width:100%;margin-top:8px;}
+    .msg{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;display:none;}
+    .msg.ok{background:#e2efda;color:#155724;display:block;}
+    .msg.err{background:#fce4e4;color:#a11;display:block;}
+
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eee;vertical-align:middle;}
+    th{color:#666;font-weight:600;font-size:12px;}
+    td input[type=number]{width:80px;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:14px;text-align:right;}
+    .lech-row{background:#fff2cc;}
+    .lech-badge{font-weight:700;}
+    .lech-badge.neg{color:var(--bad);}
+    .lech-badge.pos{color:var(--ok);}
+    .lech-badge.zero{color:#999;}
+    .footer-link{text-align:center;margin-top:6px;}
+    .footer-link a{font-size:12px;color:#888;text-decoration:none;margin:0 8px;}
+    .summary-box{background:var(--accent);color:#fff;border-radius:10px;padding:10px 14px;font-weight:700;text-align:center;margin-bottom:10px;font-size:13px;}
+  </style>
+</head>
+<body>
+  <div class="header"><h1>📋 Kiểm kê quà - Masan Amazing Race 2026</h1></div>
+  <div class="container">
+
+    <div class="card">
+      <label>👤 Người kiểm kê *</label>
+      <input type="text" id="tenNguoiKiemKe" placeholder="Nhập tên của bạn">
+      <label style="margin-top:10px;">🔑 Mã truy cập Check-in *</label>
+      <input type="text" id="maTruyCap" placeholder="Mã do BTC cấp (giống mã dùng ở trang Check-in)">
+      <button class="btn-primary" onclick="taiDanhSachKho()">📥 Tải danh sách kho hiện tại</button>
+      <div class="msg" id="taiMsg"></div>
+    </div>
+
+    <div class="card" id="ketQuaCard" style="display:none;">
+      <p style="font-size:12.5px;color:#666;margin-top:-2px;">
+        Mỗi dòng mặc định điền sẵn số theo hệ thống — chỉ cần SỬA LẠI đúng số đếm thực tế cho những dòng
+        có sai khác. Dòng có chênh lệch sẽ tự động tô vàng.
+      </p>
+      <div style="overflow-x:auto;">
+        <table id="tableKiemKe">
+          <thead><tr><th>Loại quà</th><th>Miền</th><th>Hệ thống</th><th>Đếm thực tế</th><th>Chênh lệch</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="summary-box" id="summaryBox" style="margin-top:14px;">0 dòng có chênh lệch</div>
+      <button class="btn-accent" onclick="luuKiemKe()">💾 Lưu kết quả kiểm kê</button>
+      <div class="msg" id="luuMsg"></div>
+      <p style="font-size:11.5px;color:#999;margin-top:8px;">
+        Lưu ý: kết quả kiểm kê được gửi cho người quản trị hệ thống xem xét — số liệu trong Kho_Qua
+        <b>KHÔNG</b> tự động thay đổi ngay, chỉ thay đổi sau khi Admin xác nhận áp dụng.
+      </p>
+    </div>
+
+    <div class="footer-link">
+      <a href="checkin.html">🎁 Trang Check-in</a> · <a href="admin.html">🛠️ Trang quản trị</a>
+    </div>
+  </div>
+
+<script>
+// ⚠️ THAY URL NÀY bằng link Web app Apps Script (menu Sheet: "🔗 Lấy link API") — giống hệt checkin.html/admin.html
+const API_URL = 'DÁN_LINK_API_APPS_SCRIPT_VAO_DAY';
+
+let danhSachKho = [];
+
+async function goiApi(action, payload) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, payload })
+  });
+  const text = await res.text();
+  return parseJsonAnToan(text);
+}
+
+function parseJsonAnToan(text) {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    const trimmed = text.trim();
+    for (let end = trimmed.length; end > 0; end--) {
+      if (trimmed[end - 1] !== '}' && trimmed[end - 1] !== ']') continue;
+      try { return JSON.parse(trimmed.slice(0, end)); } catch (e2) { /* thử vị trí trước đó */ }
+    }
+    throw e;
+  }
+}
+
+function maTruyCapHienTai() { return document.getElementById('maTruyCap').value.trim(); }
+
+function taiDanhSachKho() {
+  const ten = document.getElementById('tenNguoiKiemKe').value.trim();
+  const msgEl = document.getElementById('taiMsg');
+  if (!ten) { msgEl.className = 'msg err'; msgEl.innerText = 'Vui lòng nhập tên người kiểm kê.'; return; }
+  msgEl.className = 'msg ok';
+  msgEl.innerText = 'Đang tải...';
+
+  goiApi('layDanhSachKhoChoKiemKe', { maTruyCap: maTruyCapHienTai() })
+    .then(res => {
+      if (!res.ok) { msgEl.className = 'msg err'; msgEl.innerText = '❌ ' + res.error; return; }
+      danhSachKho = res.data;
+      msgEl.className = 'msg ok';
+      msgEl.innerText = `✅ Đã tải ${danhSachKho.length} dòng kho.`;
+      veBangKiemKe();
+      document.getElementById('ketQuaCard').style.display = 'block';
+    })
+    .catch(err => { msgEl.className = 'msg err'; msgEl.innerText = '❌ Lỗi kết nối: ' + err.message; });
+}
+
+function veBangKiemKe() {
+  const tbody = document.querySelector('#tableKiemKe tbody');
+  tbody.innerHTML = danhSachKho.map((k, i) => `
+    <tr id="row-${i}">
+      <td>${k.loai}</td>
+      <td>${k.mien || '(Dùng chung)'}</td>
+      <td>${k.conLai}</td>
+      <td><input type="number" id="input-${i}" value="${k.conLai}" oninput="capNhatChenhLech(${i})"></td>
+      <td id="lech-${i}"><span class="lech-badge zero">0</span></td>
+    </tr>`).join('');
+  capNhatTongHop();
+}
+
+function capNhatChenhLech(i) {
+  const row = document.getElementById(`row-${i}`);
+  const input = document.getElementById(`input-${i}`);
+  const lechEl = document.getElementById(`lech-${i}`);
+  const heThong = danhSachKho[i].conLai;
+  const thucTe = Number(input.value);
+  const lech = isNaN(thucTe) ? 0 : thucTe - heThong;
+
+  let cls = 'zero', txt = '0';
+  if (lech > 0) { cls = 'pos'; txt = '+' + lech; }
+  else if (lech < 0) { cls = 'neg'; txt = String(lech); }
+
+  lechEl.innerHTML = `<span class="lech-badge ${cls}">${txt}</span>`;
+  row.classList.toggle('lech-row', lech !== 0);
+  capNhatTongHop();
+}
+
+function capNhatTongHop() {
+  let soLech = 0;
+  danhSachKho.forEach((k, i) => {
+    const input = document.getElementById(`input-${i}`);
+    const thucTe = Number(input.value);
+    if (!isNaN(thucTe) && thucTe !== k.conLai) soLech++;
+  });
+  document.getElementById('summaryBox').innerText =
+    soLech === 0 ? 'Chưa có dòng nào chênh lệch' : `⚠️ ${soLech} dòng có chênh lệch so với hệ thống`;
+}
+
+function luuKiemKe() {
+  const ten = document.getElementById('tenNguoiKiemKe').value.trim();
+  const msgEl = document.getElementById('luuMsg');
+  if (!ten) { msgEl.className = 'msg err'; msgEl.innerText = 'Vui lòng nhập tên người kiểm kê.'; return; }
+
+  const danhSachDem = danhSachKho.map((k, i) => {
+    const input = document.getElementById(`input-${i}`);
+    const thucTe = Number(input.value);
+    return { loai: k.loai, mien: k.mien, conLaiHeThong: k.conLai, soLuongThucTe: isNaN(thucTe) ? null : thucTe };
+  }).filter(x => x.soLuongThucTe !== null);
+
+  if (!confirm(`Xác nhận lưu kết quả kiểm kê cho ${danhSachDem.length} dòng?`)) return;
+
+  msgEl.className = 'msg ok';
+  msgEl.innerText = 'Đang lưu...';
+
+  goiApi('luuKetQuaKiemKe', { danhSachDem, nguoiKiemKe: ten, maTruyCap: maTruyCapHienTai() })
+    .then(res => {
+      if (!res.ok) { msgEl.className = 'msg err'; msgEl.innerText = '❌ ' + res.error; return; }
+      msgEl.className = 'msg ok';
+      msgEl.innerText = '✅ ' + res.message;
+    })
+    .catch(err => { msgEl.className = 'msg err'; msgEl.innerText = '❌ Lỗi kết nối: ' + err.message; });
+}
+</script>
+</body>
+</html>
