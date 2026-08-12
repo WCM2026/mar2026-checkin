@@ -21,6 +21,8 @@
     #reader{width:100%;border-radius:12px;overflow:hidden;}
     #manualInput{display:flex;gap:8px;margin-top:8px;}
     #manualInput input{flex:1;}
+    .scan-status{display:none;text-align:center;font-size:13px;color:var(--primary);font-weight:600;padding:10px;background:#eef2fb;border-radius:8px;margin-top:8px;}
+    .scan-status.show{display:block;}
 
     .total-box{background:var(--accent);color:#fff;border-radius:10px;padding:10px 14px;font-weight:700;text-align:center;margin-bottom:10px;font-size:13px;}
 
@@ -59,11 +61,16 @@
     </div>
 
     <div class="card" id="scanCard" style="display:none;">
-      <div id="reader"></div>
+      <div id="scanArea" style="display:none;">
+        <div id="reader"></div>
+        <button class="btn-sm" style="width:100%;margin-top:8px;" onclick="dongCamera()">✖ Đóng camera</button>
+      </div>
+      <button class="btn-accent" id="btnQuet" onclick="moCamera()">📷 Quét QR</button>
       <div id="manualInput">
         <input type="text" id="manualMSNV" placeholder="Hoặc nhập MSNV thủ công">
         <button class="btn-sm" onclick="themThuCong()">Thêm</button>
       </div>
+      <div class="scan-status" id="scanStatus">🔍 Đang tìm kiếm thông tin...</div>
     </div>
 
     <div class="card" id="batchCard" style="display:none;">
@@ -79,33 +86,70 @@
 
 <script>
 // ⚠️ THAY URL NÀY bằng link Web app Apps Script (menu Sheet: "🔗 Lấy link API")
-const API_URL = 'https://script.google.com/macros/s/AKfycbwTHfuCg9DBidKBqfadFFgrl9cioHbmunik_jxv67AivNkc15nIHfdmOQYvDtN8yIZ9/exec';
+const API_URL = 'DÁN_LINK_API_APPS_SCRIPT_VAO_DAY';
 
 let batch = {}; // { msnv: { hoTen, bu, chiTiet:[{loai,soLuong,daPhat}], checked:Set } }
 let scanner = null;
-let dangXuLy = false;
+let dangXuLy = false;   // đang chờ API trả kết quả (chặn quét/nhập trùng trong lúc chờ)
+let dangMoCamera = false;
 
 document.getElementById('tenNguoiPhat').addEventListener('input', kiemTraSanSangQuet);
 document.getElementById('maTruyCap').addEventListener('input', kiemTraSanSangQuet);
 
 function kiemTraSanSangQuet() {
-  const co = document.getElementById('tenNguoiPhat').value.trim().length > 0 &&
-             document.getElementById('maTruyCap').value.trim().length >= 0; // mã có thể để trống nếu chưa cấu hình
+  const co = document.getElementById('tenNguoiPhat').value.trim().length > 0;
   document.getElementById('scanCard').style.display = co ? 'block' : 'none';
-  if (co && !scanner) khoiDongScanner();
 }
 
-function khoiDongScanner() {
-  scanner = new Html5Qrcode('reader');
+// Cấu hình quét được tối ưu cho tốc độ nhận diện & góc quét rộng hơn:
+// - fps cao hơn (15) để quét mượt hơn
+// - qrbox tính theo % kích thước khung hình (không cố định pixel), giúp bắt được mã ở nhiều khoảng cách/góc hơn
+// - dùng BarcodeDetector gốc của trình duyệt nếu hỗ trợ (nhanh & chính xác hơn nhiều so với thuật toán JS thuần)
+// - chỉ quét định dạng QR_CODE để giảm tải xử lý, tăng tốc độ nhận diện
+function taoCauHinhQuet() {
+  return {
+    fps: 15,
+    qrbox: function (viewfinderWidth, viewfinderHeight) {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      const size = Math.floor(minEdge * 0.75);
+      return { width: size, height: size };
+    },
+    aspectRatio: 1.0,
+    disableFlip: false,
+    formatsToSupport: (typeof Html5QrcodeSupportedFormats !== 'undefined')
+      ? [Html5QrcodeSupportedFormats.QR_CODE] : undefined,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  };
+}
+
+function moCamera() {
+  if (dangMoCamera) return;
+  dangMoCamera = true;
+  document.getElementById('scanArea').style.display = 'block';
+  document.getElementById('btnQuet').style.display = 'none';
+
+  if (!scanner) scanner = new Html5Qrcode('reader');
   Html5Qrcode.getCameras().then(cams => {
-    if (!cams.length) { showToast('Không tìm thấy camera. Dùng ô nhập MSNV thủ công bên dưới.'); return; }
+    if (!cams.length) { showToast('Không tìm thấy camera. Dùng ô nhập MSNV thủ công bên dưới.'); dongCamera(); return; }
     const camId = cams[cams.length - 1].id; // thường camera sau nằm cuối danh sách
-    scanner.start(camId, { fps: 10, qrbox: 240 }, onScanSuccess, () => {});
-  }).catch(() => showToast('Không truy cập được camera. Dùng ô nhập MSNV thủ công.'));
+    scanner.start(camId, taoCauHinhQuet(), onScanSuccess, () => {})
+      .catch(err => { showToast('Không mở được camera: ' + err); dongCamera(); });
+  }).catch(() => { showToast('Không truy cập được camera. Dùng ô nhập MSNV thủ công.'); dongCamera(); });
+}
+
+function dongCamera() {
+  document.getElementById('scanArea').style.display = 'none';
+  document.getElementById('btnQuet').style.display = 'block';
+  dangMoCamera = false;
+  if (scanner) {
+    scanner.stop().then(() => scanner.clear()).catch(() => {});
+  }
 }
 
 function onScanSuccess(decodedText) {
   if (dangXuLy) return;
+  beep();
+  dongCamera(); // đóng camera ngay sau khi bắt được mã, tránh quét lặp lại liên tục cùng 1 mã
   xuLyMa(decodedText);
 }
 
@@ -131,10 +175,14 @@ function maTruyCapHienTai() { return document.getElementById('maTruyCap').value.
 function xuLyMa(maQuet) {
   if (dangXuLy) return;
   dangXuLy = true;
-  beep();
+  hienTrangThaiQuet(true);
   goiApi('timNguoiNhan', { maQuet, maTruyCap: maTruyCapHienTai() })
-    .then(res => { dangXuLy = false; xuLyKetQuaTim(res); })
-    .catch(err => { dangXuLy = false; showToast('Lỗi kết nối: ' + err.message); });
+    .then(res => { dangXuLy = false; hienTrangThaiQuet(false); xuLyKetQuaTim(res); })
+    .catch(err => { dangXuLy = false; hienTrangThaiQuet(false); showToast('Lỗi kết nối: ' + err.message); });
+}
+
+function hienTrangThaiQuet(dangTim) {
+  document.getElementById('scanStatus').classList.toggle('show', dangTim);
 }
 
 function xuLyKetQuaTim(res) {
