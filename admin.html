@@ -160,13 +160,33 @@
         </div>
 
         <div class="card">
+          <h3>Tổng hợp theo Miền</h3>
+          <div style="overflow-x:auto;">
+            <table id="tableMien">
+              <thead><tr><th>Miền</th><th>Tổng</th><th>Chưa nhận</th><th>Một phần</th><th>Đã nhận đủ</th><th>% Hoàn thành</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
           <h3>Số người theo BU / Chuỗi</h3>
           <div id="statBU"></div>
         </div>
 
         <div class="card">
-          <h3>Tồn kho theo loại quà</h3>
+          <h3>Tồn kho theo loại quà (tổng tất cả Miền)</h3>
           <div id="statKho"></div>
+        </div>
+
+        <div class="card">
+          <h3>Tồn kho theo Miền</h3>
+          <div style="overflow-x:auto;">
+            <table id="tableKhoMien">
+              <thead><tr><th>Miền</th><th>Loại quà</th><th>Tổng</th><th>Đã phát</th><th>Còn lại</th><th>%</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
 
         <div class="card">
@@ -188,7 +208,7 @@
 
 <script>
 // ⚠️ THAY URL NÀY bằng link Web app Apps Script (menu Sheet: "🔗 Lấy link API")
-const API_URL = 'https://script.google.com/macros/s/AKfycbwTHfuCg9DBidKBqfadFFgrl9cioHbmunik_jxv67AivNkc15nIHfdmOQYvDtN8yIZ9/exec';
+const API_URL = 'DÁN_LINK_API_APPS_SCRIPT_VAO_DAY';
 
 let matKhauAdmin = '';
 
@@ -331,6 +351,11 @@ function veDashboard(d) {
     statBox(d.chuaGuiEmail, 'Chưa gửi (có email)', 'warn') +
     statBox(d.thieuEmail, 'Thiếu email', 'bad');
 
+  const tbodyMien = document.querySelector('#tableMien tbody');
+  tbodyMien.innerHTML = (d.theoMien || []).map(m => `<tr>
+    <td>${m.mien}</td><td>${m.tong}</td><td>${m.chuaNhan}</td><td>${m.motPhan}</td><td>${m.duDu}</td><td>${m.tyLeHoanThanh}%</td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#888;">Không có dữ liệu Miền (cần cột "Mien" trong DS_NhanQua).</td></tr>';
+
   let buHtml = '';
   const maxBU = Math.max(1, ...d.theoBU.map(x => x.count));
   d.theoBU.forEach(x => {
@@ -350,6 +375,11 @@ function veDashboard(d) {
     </div>`;
   });
   document.getElementById('statKho').innerHTML = khoHtml || '<p style="font-size:13px;color:#888;">Chưa có dữ liệu kho.</p>';
+
+  const tbodyKhoMien = document.querySelector('#tableKhoMien tbody');
+  tbodyKhoMien.innerHTML = (d.khoTheoMien || []).map(k => `<tr>
+    <td>${k.mien}</td><td>${k.loai}</td><td>${k.tong}</td><td>${k.daPhat}</td><td>${k.conLai}</td><td>${k.phanTram}%</td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#888;">Chưa có dữ liệu kho theo Miền — dùng menu "🗺️ Tạo lại Kho_Qua theo Miền" trong Sheet.</td></tr>';
 
   const tbody = document.querySelector('#tableLog tbody');
   tbody.innerHTML = d.logGanDay.map(l => `<tr>
